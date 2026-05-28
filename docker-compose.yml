@@ -1,0 +1,9 @@
+services:
+  ingestion:
+    build: .
+    container_name: brasil-data-ingestion
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+    restart: "no"
