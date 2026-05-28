@@ -1,0 +1,80 @@
+{
+  "name": "brasil_pipeline_daily",
+  "schedule": {
+    "quartz_cron_expression": "0 0 6 * * ?",
+    "timezone_id": "America/Sao_Paulo",
+    "pause_status": "UNPAUSED"
+  },
+  "tasks": [
+    {
+      "task_key": "ingestao_bcb_ibge",
+      "description": "Executa o script de ingestão Python que coleta dados das APIs do BCB e IBGE e faz upload para o Azure Blob Storage (camada Bronze)",
+      "python_wheel_task": {
+        "package_name": "brasil_pipeline",
+        "entry_point": "run_pipeline"
+      },
+      "cluster_id": "${CLUSTER_ID}",
+      "timeout_seconds": 600,
+      "max_retries": 2,
+      "retry_on_timeout": true
+    },
+    {
+      "task_key": "bronze_to_silver",
+      "description": "Lê dados brutos da camada Bronze, limpa, tipifica e salva como Delta Lake na camada Silver",
+      "depends_on": [
+        {"task_key": "ingestao_bcb_ibge"}
+      ],
+      "notebook_task": {
+        "notebook_path": "/Repos/brasil-data-pipeline/notebooks/01_bronze_to_silver",
+        "base_parameters": {
+          "storage_account": "${STORAGE_ACCOUNT}",
+          "container": "datalake"
+        }
+      },
+      "cluster_id": "${CLUSTER_ID}",
+      "timeout_seconds": 900,
+      "max_retries": 1
+    },
+    {
+      "task_key": "silver_to_gold",
+      "description": "Agrega dados da camada Silver em métricas de negócio e salva na camada Gold",
+      "depends_on": [
+        {"task_key": "bronze_to_silver"}
+      ],
+      "notebook_task": {
+        "notebook_path": "/Repos/brasil-data-pipeline/notebooks/02_silver_to_gold",
+        "base_parameters": {
+          "storage_account": "${STORAGE_ACCOUNT}",
+          "container": "datalake"
+        }
+      },
+      "cluster_id": "${CLUSTER_ID}",
+      "timeout_seconds": 900,
+      "max_retries": 1
+    },
+    {
+      "task_key": "data_quality",
+      "description": "Executa validações de completude, unicidade e consistência nas camadas Silver e Gold",
+      "depends_on": [
+        {"task_key": "silver_to_gold"}
+      ],
+      "notebook_task": {
+        "notebook_path": "/Repos/brasil-data-pipeline/notebooks/03_data_quality",
+        "base_parameters": {
+          "storage_account": "${STORAGE_ACCOUNT}",
+          "container": "datalake"
+        }
+      },
+      "cluster_id": "${CLUSTER_ID}",
+      "timeout_seconds": 600,
+      "max_retries": 1
+    }
+  ],
+  "email_notifications": {
+    "on_failure": ["${ALERT_EMAIL}"]
+  },
+  "tags": {
+    "project": "brasil-data-pipeline",
+    "env": "production"
+  }
+}

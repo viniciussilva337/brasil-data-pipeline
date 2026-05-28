@@ -36,6 +36,7 @@ data/
 *.csv
 *.json
 !config/*.json
+!databricks/*.json
 
 # Jupyter
 .ipynb_checkpoints/
