@@ -1,21 +1,30 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # Bronze → Silver
-# MAGIC Leitura dos dados brutos (JSON) do DBFS, limpeza e padronização.
+# MAGIC Leitura dos dados brutos (JSON) do Azure Blob Storage, limpeza e padronização.
 
 # COMMAND ----------
 
 from pyspark.sql import functions as F
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType
+from pyspark.sql.types import DoubleType
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Configuração
+# MAGIC ## Configuração do Azure Blob Storage
 
 # COMMAND ----------
 
-base_path = "/FileStore/brasil_pipeline"
+storage_account = "stbrasilpipeline"
+container = "datalake"
+access_key = dbutils.secrets.get(scope="brasil-pipeline", key="storage-access-key")
+
+spark.conf.set(
+    f"fs.azure.account.key.{storage_account}.blob.core.windows.net",
+    access_key,
+)
+
+base_path = f"wasbs://{container}@{storage_account}.blob.core.windows.net"
 
 # COMMAND ----------
 
@@ -62,7 +71,7 @@ if bcb_frames:
         .orderBy("serie", "data_referencia")
     )
 
-    print(f"BCB Silver: {df_bcb_silver.count()} registros após limpeza")
+    print(f"\nBCB Silver: {df_bcb_silver.count()} registros após limpeza")
     df_bcb_silver.display()
 
 # COMMAND ----------

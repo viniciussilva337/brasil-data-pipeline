@@ -15,7 +15,16 @@ from datetime import datetime
 
 # COMMAND ----------
 
-base_path = "/FileStore/brasil_pipeline"
+storage_account = "stbrasilpipeline"
+container = "datalake"
+access_key = dbutils.secrets.get(scope="brasil-pipeline", key="storage-access-key")
+
+spark.conf.set(
+    f"fs.azure.account.key.{storage_account}.blob.core.windows.net",
+    access_key,
+)
+
+base_path = f"wasbs://{container}@{storage_account}.blob.core.windows.net"
 
 # COMMAND ----------
 

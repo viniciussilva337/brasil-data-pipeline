@@ -1,7 +1,7 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # Ingestão de Dados (Camada Bronze)
-# MAGIC Coleta dados das APIs do Banco Central e IBGE e salva no DBFS como JSON.
+# MAGIC Coleta dados das APIs do Banco Central e IBGE e salva no Azure Blob Storage.
 
 # COMMAND ----------
 
@@ -9,6 +9,32 @@ import requests
 import json
 import time
 from datetime import datetime, timedelta
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Configuração do Azure Blob Storage
+
+# COMMAND ----------
+
+storage_account = "stbrasilpipeline"
+container = "datalake"
+access_key = dbutils.secrets.get(scope="brasil-pipeline", key="storage-access-key")
+
+spark.conf.set(
+    f"fs.azure.account.key.{storage_account}.blob.core.windows.net",
+    access_key,
+)
+
+base_path = f"wasbs://{container}@{storage_account}.blob.core.windows.net"
+
+# Criar container se não existir
+try:
+    dbutils.fs.ls(base_path)
+    print(f"Container '{container}' encontrado")
+except:
+    dbutils.fs.mkdirs(base_path)
+    print(f"Container '{container}' será criado no primeiro upload")
 
 # COMMAND ----------
 
@@ -52,6 +78,9 @@ for serie_name, codigo in BCB_SERIES.items():
 
     time.sleep(1)
 
+bcb_total = sum(len(r) for r in bcb_data.values())
+print(f"\nTotal BCB: {bcb_total} registros")
+
 # COMMAND ----------
 
 # MAGIC %md
@@ -65,7 +94,6 @@ IBGE_AGREGADOS = {"pib": 5938, "ipca_geral": 1737, "populacao": 6579}
 ibge_data = {}
 
 for agregado_name, codigo in IBGE_AGREGADOS.items():
-    # Buscar períodos disponíveis
     try:
         resp_periodos = requests.get(f"{IBGE_BASE_URL}/agregados/{codigo}/periodos", timeout=30)
         resp_periodos.raise_for_status()
@@ -114,7 +142,7 @@ for agregado_name, codigo in IBGE_AGREGADOS.items():
 try:
     resp = requests.get("https://servicodados.ibge.gov.br/api/v1/localidades/estados", timeout=30)
     resp.raise_for_status()
-    estados = [
+    ibge_data["estados"] = [
         {
             "id": e["id"], "sigla": e["sigla"], "nome": e["nome"],
             "regiao_id": e["regiao"]["id"], "regiao_nome": e["regiao"]["nome"],
@@ -122,23 +150,23 @@ try:
         }
         for e in resp.json()
     ]
-    ibge_data["estados"] = estados
-    print(f"IBGE - estados: {len(estados)} registros")
+    print(f"IBGE - estados: {len(ibge_data['estados'])} registros")
 except Exception as e:
     print(f"IBGE - estados: ERRO - {e}")
     ibge_data["estados"] = []
 
+ibge_total = sum(len(r) for r in ibge_data.values())
+print(f"\nTotal IBGE: {ibge_total} registros")
+
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 3. Salvar na camada Bronze (DBFS)
+# MAGIC ## 3. Salvar na camada Bronze (Azure Blob Storage)
 
 # COMMAND ----------
 
-base_path = "/FileStore/brasil_pipeline"
 now = datetime.now()
 date_path = now.strftime("%Y/%m/%d")
-
 paths = []
 
 for serie_name, records in bcb_data.items():
@@ -146,16 +174,20 @@ for serie_name, records in bcb_data.items():
         blob_path = f"{base_path}/bronze/bcb/{serie_name}/{date_path}/data.json"
         dbutils.fs.put(blob_path, json.dumps(records, ensure_ascii=False, indent=2), overwrite=True)
         paths.append(blob_path)
-        print(f"Salvo: {blob_path} ({len(records)} registros)")
+        print(f"Salvo: bronze/bcb/{serie_name} ({len(records)} registros)")
 
 for dataset_name, records in ibge_data.items():
     if records:
         blob_path = f"{base_path}/bronze/ibge/{dataset_name}/{date_path}/data.json"
         dbutils.fs.put(blob_path, json.dumps(records, ensure_ascii=False, indent=2), overwrite=True)
         paths.append(blob_path)
-        print(f"Salvo: {blob_path} ({len(records)} registros)")
+        print(f"Salvo: bronze/ibge/{dataset_name} ({len(records)} registros)")
 
-print(f"\nTotal: {len(paths)} arquivos salvos na camada Bronze")
+print(f"\n{'='*60}")
+print(f"INGESTÃO CONCLUÍDA")
+print(f"  Registros totais: {bcb_total + ibge_total}")
+print(f"  Arquivos salvos: {len(paths)}")
+print(f"{'='*60}")
 
 # COMMAND ----------
 
@@ -164,5 +196,10 @@ print(f"\nTotal: {len(paths)} arquivos salvos na camada Bronze")
 
 # COMMAND ----------
 
-display(dbutils.fs.ls(f"{base_path}/bronze/bcb/"))
-display(dbutils.fs.ls(f"{base_path}/bronze/ibge/"))
+print("=== Camada Bronze - BCB ===")
+for item in dbutils.fs.ls(f"{base_path}/bronze/bcb/"):
+    print(f"  {item.name}")
+
+print("\n=== Camada Bronze - IBGE ===")
+for item in dbutils.fs.ls(f"{base_path}/bronze/ibge/"):
+    print(f"  {item.name}")
