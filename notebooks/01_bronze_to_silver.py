@@ -1,7 +1,7 @@
 # Databricks notebook source
 # MAGIC %md
 # MAGIC # Bronze → Silver
-# MAGIC Leitura dos dados brutos (JSON) do Azure Blob Storage, limpeza e padronização.
+# MAGIC Leitura dos dados brutos (JSON) do DBFS, limpeza e padronização.
 
 # COMMAND ----------
 
@@ -11,20 +11,11 @@ from pyspark.sql.types import StructType, StructField, StringType, DoubleType, I
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Configuração do Azure Blob Storage
+# MAGIC ## Configuração
 
 # COMMAND ----------
 
-storage_account = dbutils.widgets.get("storage_account")
-container = dbutils.widgets.get("container")
-sas_token = dbutils.secrets.get(scope="azure-storage", key="sas-token")
-
-spark.conf.set(
-    f"fs.azure.sas.{container}.{storage_account}.blob.core.windows.net",
-    sas_token,
-)
-
-base_path = f"wasbs://{container}@{storage_account}.blob.core.windows.net"
+base_path = "/FileStore/brasil_pipeline"
 
 # COMMAND ----------
 

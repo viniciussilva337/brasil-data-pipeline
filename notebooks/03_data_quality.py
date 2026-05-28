@@ -15,16 +15,7 @@ from datetime import datetime
 
 # COMMAND ----------
 
-storage_account = dbutils.widgets.get("storage_account")
-container = dbutils.widgets.get("container")
-sas_token = dbutils.secrets.get(scope="azure-storage", key="sas-token")
-
-spark.conf.set(
-    f"fs.azure.sas.{container}.{storage_account}.blob.core.windows.net",
-    sas_token,
-)
-
-base_path = f"wasbs://{container}@{storage_account}.blob.core.windows.net"
+base_path = "/FileStore/brasil_pipeline"
 
 # COMMAND ----------
 
