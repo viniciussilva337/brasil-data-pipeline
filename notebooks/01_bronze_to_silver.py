@@ -39,7 +39,7 @@ bcb_frames = []
 for serie in bcb_series:
     path = f"{base_path}/bronze/bcb/{serie}/*/*/*/*"
     try:
-        df = spark.read.json(path)
+        df = spark.read.option("multiLine", True).json(path)
         bcb_frames.append(df)
         print(f"BCB - {serie}: {df.count()} registros lidos")
     except Exception as e:
@@ -87,7 +87,7 @@ ibge_frames = {}
 for dataset in ibge_datasets:
     path = f"{base_path}/bronze/ibge/{dataset}/*/*/*/*"
     try:
-        df = spark.read.json(path)
+        df = spark.read.option("multiLine", True).json(path)
         ibge_frames[dataset] = df
         print(f"IBGE - {dataset}: {df.count()} registros lidos")
     except Exception as e:

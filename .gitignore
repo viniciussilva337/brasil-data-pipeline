@@ -46,3 +46,7 @@ data/
 
 # Azure
 .azure/
+
+# Claude Code (contexto local, não versionar)
+CLAUDE.local.md
+.claude/
